@@ -21,13 +21,13 @@ A lightweight macOS utility that temporarily locks your keyboard for cleaning. P
 ## 🔧 Installation Options
 
 ### Download Pre-built Application
-1. Visit the [Releases](https://github.com/yourusername/macos-keyboardblocker/releases) page
+1. Visit the [Releases](https://github.com/huseyinaslim/macos-keyboardblocker/releases) page
 2. Download the latest `KeyboardBlocker.app.zip` file
 3. Extract and move to your Applications folder
 4. ⚠️ First time: Control+click and select "Open" to bypass Gatekeeper
 
 ### Build from Source Code
-1. Clone this repository: `git clone https://github.com/yourusername/macos-keyboardblocker.git`
+1. Clone this repository: `git clone https://github.com/huseyinaslim/macos-keyboardblocker.git`
 2. Open Terminal and navigate to the project directory
 3. Run `swift build -c release`
 4. Find the built executable at `.build/release/KeyboardBlocker`
@@ -47,24 +47,25 @@ KeyboardBlocker runs entirely on your local machine and does not collect or tran
 ## ⚙️ System Requirements
 
 - macOS 11 (Big Sur) or later
-- Compatible with Apple Silicon (M1/M2/M3) and Intel Macs
+- Compatible with Apple Silicon (M1/M2/M3/M4) and Intel Macs
 - Minimal disk space required (< 5MB)
 
 ## 🤝 Contributing
 
 Contributions are welcome! Here's how you can help:
-- Report bugs or suggest features through [Issues](https://github.com/yourusername/macos-keyboardblocker/issues)
-- Submit improvements through [Pull Requests](https://github.com/yourusername/macos-keyboardblocker/pulls)
+- Report bugs or suggest features through [Issues](https://github.com/huseyinaslim/macos-keyboardblocker/issues)
+- Submit improvements through [Pull Requests](https://github.com/huseyinaslim/macos-keyboardblocker/pulls)
 - Share the app with other Mac users
 
 ## 📝 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 📱 Related Projects
+## ❤️ Sponsor this project
 
-- Looking for a similar tool for Windows? Try [WinKeyboardLocker](https://github.com/link-to-similar-windows-project)
-- Need to clean your trackpad too? Check out [MacInputBlocker](https://github.com/link-to-similar-project)
+If you find KeyboardBlocker useful, please consider sponsoring its development. Your support helps maintain this project and create new features!
+
+[![Sponsor](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa.svg?style=for-the-badge&logo=github)](https://github.com/sponsors/huseyinaslim)
 
 ## 🔍 Keywords
 
