@@ -7,7 +7,7 @@
 
 A lightweight macOS utility that temporarily locks your keyboard for cleaning. Prevents accidental key presses while cleaning your MacBook, Magic Keyboard, or any external keyboard connected to your Mac.
 
-![KeyboardBlocker Screenshot](screenshot.png)
+![KeyboardBlocker Screenshot](screenshot.gif)
 
 ## What’s new in 1.1.0
 
