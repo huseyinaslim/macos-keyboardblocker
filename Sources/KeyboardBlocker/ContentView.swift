@@ -95,33 +95,64 @@ struct ContentView: View {
     
     // Kilitli Durumda Görünüm
     private var lockedView: some View {
-        VStack(spacing: 20) {
-            Text("Your keyboard is now locked for cleaning")
-                .font(.system(size: 16, weight: .medium))
-                .multilineTextAlignment(.center)
-            
-            HStack(spacing: 10) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color(NSColor.controlBackgroundColor))
-                        .frame(width: 36, height: 36)
-                        .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+        ZStack {
+            VStack(spacing: 20) {
+                Text("Your keyboard is now locked for cleaning")
+                    .font(.system(size: 16, weight: .medium))
+                    .multilineTextAlignment(.center)
+                
+                HStack(spacing: 10) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color(NSColor.controlBackgroundColor))
+                            .frame(width: 36, height: 36)
+                            .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+                        
+                        Text("ESC")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.primary)
+                    }
                     
-                    Text("esc")
-                        .font(.system(size: 16, weight: .semibold))
+                    Text("Hold ESC key for 3 seconds to unlock")
+                        .font(.system(size: 16, weight: .medium))
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.top, 10)
+            }
+            .opacity(keyboardBlocker.isEscPressed ? 0 : 1.0)
+            .animation(.easeInOut, value: keyboardBlocker.isEscPressed)
+            
+            // ESC Basılı Tutma Göstergesi
+            if keyboardBlocker.isEscPressed {
+                ZStack {
+                    // Arka plan halkası
+                    Circle()
+                        .stroke(Color.gray.opacity(0.3), lineWidth: 8)
+                        .frame(width: 120, height: 120)
+                    
+                    // İlerleme halkası (Tersi: Başlangıçta dolu, azalarak biter)
+                    Circle()
+                        .trim(from: 0.0, to: keyboardBlocker.unlockProgress)
+                        .stroke(Color.red, style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                        .frame(width: 120, height: 120)
+                        .rotationEffect(.degrees(-90))
+                        .animation(.linear(duration: 0.05), value: keyboardBlocker.unlockProgress)
+                    
+                    // Geri sayım sayısı
+                    let secondsLeft = Int(ceil(keyboardBlocker.unlockProgress * 3.0))
+                    Text("\(secondsLeft)")
+                        .font(.system(size: 40, weight: .bold))
                         .foregroundColor(.primary)
                 }
-                
-                Text("Press ESC key to unlock")
-                    .font(.system(size: 16, weight: .medium))
+                .transition(.scale.combined(with: .opacity))
             }
-            .padding(.top, 10)
         }
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color(NSColor.controlBackgroundColor).opacity(0.6))
-                .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
+                .fill(Color(NSColor.controlBackgroundColor).opacity(keyboardBlocker.isEscPressed ? 0 : 0.6))
+                .shadow(color: .black.opacity(keyboardBlocker.isEscPressed ? 0 : 0.05), radius: 5, x: 0, y: 2)
         )
         .padding(.horizontal)
         .transition(.opacity)

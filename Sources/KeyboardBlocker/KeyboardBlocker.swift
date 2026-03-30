@@ -32,6 +32,14 @@ class KeyboardBlocker: ObservableObject {
     // Emergency handler closure
     private var emergencyUnlockHandler: (() -> Void)?
     
+    // Timer for ESC key
+    private var escTimer: Timer?
+    private let pressDuration: TimeInterval = 3.0
+    private let timerInterval: TimeInterval = 0.05 // Update 20 times per second for smooth UI
+    
+    @Published var unlockProgress: Double = 1.0 // 1.0 -> 0.0
+    @Published var isEscPressed: Bool = false
+    
     // F Tuşları için keyCodes
     private let fKeyCodes = Set([
         122, 123,  // Ses tuşları
@@ -77,34 +85,41 @@ class KeyboardBlocker: ObservableObject {
                         (1 << CGEventType.flagsChanged.rawValue) |
                         (1 << 14) // NX_SYSDEFINED (sistem olayları: F tuşları, ses, vb.)
         
+        // Pass self as userInfo
+        let observer = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
+        
         guard let eventTap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
             options: .defaultTap,
             eventsOfInterest: CGEventMask(eventMask),
             callback: { (proxy, type, event, userInfo) -> Unmanaged<CGEvent>? in
+                guard let userInfo = userInfo else { return nil }
+                let mySelf = Unmanaged<KeyboardBlocker>.fromOpaque(userInfo).takeUnretainedValue()
+                
                 // Acil durum çıkışı: ESC tuşu
-                if type == .keyDown {
-                    let keycode = event.getIntegerValueField(.keyboardEventKeycode)
-                    if UInt16(keycode) == 53 { // ESC tuşu - emergencyKeyCode değeri (53) doğrudan kullanıldı
-                        // ESC tuşuna basıldı, kilidi kaldır
-                        print("Emergency exit activated with ESC key")
-                        
-                        // Ana thread'de kilidi kaldır - userInfo kullanılmadığı için doğrudan notification gönder
+                let keycode = event.getIntegerValueField(.keyboardEventKeycode)
+                if UInt16(keycode) == 53 { // ESC tuşu
+                    if type == .keyDown {
+                        // Start timer on key down
                         DispatchQueue.main.async {
-                            NotificationCenter.default.post(name: .escKeyPressed, object: nil)
+                            mySelf.startEscTimer()
                         }
-                        
-                        // ESC olayını da engelle
-                        return nil
+                    } else if type == .keyUp {
+                        // Stop timer on key up
+                        DispatchQueue.main.async {
+                            mySelf.stopEscTimer()
+                        }
                     }
+                    // Block ESC event
+                    return nil
                 }
                 
                 // Diğer tüm olayları engelle
-                print("Olay engellendi: \(type.rawValue)")
+                // Sadece ekrana basmayı engelle, loglamayı azalt
                 return nil
             },
-            userInfo: nil
+            userInfo: observer
         ) else {
             print("Failed to create event tap")
             return
@@ -124,6 +139,59 @@ class KeyboardBlocker: ObservableObject {
         // Power tuşu bildirimini de dinle
         NotificationCenter.default.addObserver(forName: .powerButtonPressed, object: nil, queue: .main) { [weak self] _ in
             self?.emergencyUnlockHandler?()
+        }
+    }
+    
+    private func startEscTimer() {
+        guard escTimer == nil else { return }
+        print("ESC timer started - hold for 3 seconds to unlock")
+        
+        // Reset state
+        unlockProgress = 1.0
+        isEscPressed = true
+        
+        let startTime = Date()
+        
+        escTimer = Timer.scheduledTimer(withTimeInterval: timerInterval, repeats: true) { [weak self] timer in
+            guard let self = self else { 
+                timer.invalidate()
+                return 
+            }
+            
+            let elapsed = Date().timeIntervalSince(startTime)
+            let remaining = max(0, self.pressDuration - elapsed)
+            self.unlockProgress = remaining / self.pressDuration
+            
+            if remaining <= 0 {
+                self.triggerEmergencyUnlock()
+            }
+        }
+    }
+    
+    private func stopEscTimer() {
+        if escTimer != nil {
+            print("ESC released too early")
+            escTimer?.invalidate()
+            escTimer = nil
+            
+            // Reset UI state
+            DispatchQueue.main.async {
+                self.isEscPressed = false
+                self.unlockProgress = 1.0
+            }
+        }
+    }
+    
+    private func triggerEmergencyUnlock() {
+        print("ESC held for 3 seconds - Unlocking")
+        escTimer?.invalidate()
+        escTimer = nil
+        
+        DispatchQueue.main.async {
+            self.isEscPressed = false
+            self.unlockProgress = 1.0 // Reset for next time
+            self.emergencyUnlockHandler?()
+            NotificationCenter.default.post(name: .escKeyPressed, object: nil)
         }
     }
     
@@ -188,10 +256,11 @@ class KeyboardBlocker: ObservableObject {
             guard let self = self else { return nil }
             
             // ESC tuşu kontrolü
-            if event.type == .keyDown && event.keyCode == self.emergencyKeyCode {
-                print("Emergency exit activated with ESC key (local monitor)")
-                DispatchQueue.main.async {
-                    self.emergencyUnlockHandler?()
+            if event.keyCode == self.emergencyKeyCode {
+                if event.type == .keyDown {
+                    self.startEscTimer()
+                } else if event.type == .keyUp {
+                    self.stopEscTimer()
                 }
             }
             
@@ -205,11 +274,12 @@ class KeyboardBlocker: ObservableObject {
         ]) { [weak self] event in
             guard let self = self else { return }
             
-            // ESC tuşu kontrolü - global monitörde olayı durduramayız ama durumu izleyebiliriz
-            if event.type == .keyDown && event.keyCode == self.emergencyKeyCode {
-                print("Emergency exit detected with ESC key (global monitor)")
-                DispatchQueue.main.async {
-                    self.emergencyUnlockHandler?()
+            // ESC tuşu kontrolü
+            if event.keyCode == self.emergencyKeyCode {
+                if event.type == .keyDown {
+                     DispatchQueue.main.async { self.startEscTimer() }
+                } else if event.type == .keyUp {
+                     DispatchQueue.main.async { self.stopEscTimer() }
                 }
             }
             
@@ -225,7 +295,7 @@ class KeyboardBlocker: ObservableObject {
                     }
                 }
             } else {
-                print("Tuş engellendi (global): \(event.keyCode)")
+               // print("Tuş engellendi (global): \(event.keyCode)")
             }
         }
         
