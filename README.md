@@ -3,70 +3,88 @@
 [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![macOS](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://www.apple.com/macos)
 [![Swift 5](https://img.shields.io/badge/Swift-5-orange.svg)](https://swift.org)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](CHANGELOG.md)
 
 A lightweight macOS utility that temporarily locks your keyboard for cleaning. Prevents accidental key presses while cleaning your MacBook, Magic Keyboard, or any external keyboard connected to your Mac.
 
 ![KeyboardBlocker Screenshot](screenshot.png)
 
-## 🌟 Key Features
+## What’s new in 1.1.0
 
-- **Complete Keyboard Blocking**: Safely cleans your MacBook keyboard without triggering unwanted actions
-- **Multi-Display Support**: Works seamlessly across all connected monitors
-- **Easy ESC Escape**: Quickly unlock with a single ESC key press
-- **Modern macOS Design**: Clean, native UI that follows Apple design guidelines
-- **Privacy Focused**: Zero data collection, runs entirely on your local machine
-- **Energy Efficient**: Minimal CPU and memory usage
-- **Universal Binary**: Runs natively on both Apple Silicon and Intel Macs
+- **Menu bar tool** — Runs from the menu bar (LSUIElement: no Dock icon). Open the popover from the keyboard icon.
+- **Minimal animated icon** — Subtle animation while the keyboard is locked.
+- **Launch at login** — Optional toggle on macOS 13+ (System Settings integration via `SMAppService`).
+- **Popover stays open when locked** — You can read unlock instructions without the window disappearing.
+- **Safer while locked** — Quit, “Start at login”, and ⌘Q are disabled until you unlock (hold **ESC for 3 seconds**).
 
-## 🔧 Installation Options
+See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
-### Download Pre-built Application
-1. Visit the [Releases](https://github.com/huseyinaslim/macos-keyboardblocker/releases) page
-2. Download the latest `KeyboardBlocker.app.zip` file
-3. Extract and move to your Applications folder
-4. ⚠️ First time: Control+click and select "Open" to bypass Gatekeeper
+## Key features
 
-### Build from Source Code
-1. Clone this repository: `git clone https://github.com/huseyinaslim/macos-keyboardblocker.git`
-2. Open Terminal and navigate to the project directory
-3. Run `swift build -c release`
-4. Find the built executable at `.build/release/KeyboardBlocker`
+- **Complete keyboard blocking**: Clean your Mac keyboard without triggering unwanted actions
+- **Multi-display support**: Dimmed overlay across all connected screens
+- **Unlock with ESC**: Hold the **ESC** key for **3 seconds** to unlock
+- **Menu bar UI**: Popover controls; right-click the icon for Open / Quit
+- **Launch at login** (macOS 13+): Enable from the popover; older macOS: add the app under System Settings → General → Login Items
+- **Privacy focused**: Zero data collection; runs entirely on your Mac
+- **Energy efficient**: Minimal CPU and memory usage
+- **Universal binary**: Apple Silicon and Intel
 
-## 📋 Usage Instructions
+## Installation
 
-1. Launch KeyboardBlocker app
-2. Grant Input Monitoring permission when prompted (required to block keyboard input)
-3. Click "Lock Keyboard" when you're ready to clean
-4. Clean your keyboard without worrying about accidental keypresses
-5. Press the ESC key to unlock when finished
+### Download pre-built app
 
-## 🔒 Privacy and Security
+1. Open [Releases](https://github.com/huseyinaslim/macos-keyboardblocker/releases)
+2. Download the latest `KeyboardBlocker.app.zip` (or attached build for **v1.1.0**)
+3. Unzip and move **KeyboardBlocker.app** to **Applications**
+4. First launch: Control-click the app → **Open** to pass Gatekeeper if needed
 
-KeyboardBlocker runs entirely on your local machine and does not collect or transmit any data. The Input Monitoring permission is required solely to intercept and block keyboard events during cleaning.
+### Build from source
 
-## ⚙️ System Requirements
+```bash
+git clone https://github.com/huseyinaslim/macos-keyboardblocker.git
+cd macos-keyboardblocker
+swift build -c release
+```
 
-- macOS 11 (Big Sur) or later
-- Compatible with Apple Silicon (M1/M2/M3/M4) and Intel Macs
-- Minimal disk space required (< 5MB)
+Binary: `.build/release/KeyboardBlocker`
 
-## 🤝 Contributing
+For a signed `.app` bundle with entitlements (e.g. launch at login), use Xcode and enable the **Login Items** capability to match `KeyboardBlocker.entitlements`.
 
-Contributions are welcome! Here's how you can help:
-- Report bugs or suggest features through [Issues](https://github.com/huseyinaslim/macos-keyboardblocker/issues)
-- Submit improvements through [Pull Requests](https://github.com/huseyinaslim/macos-keyboardblocker/pulls)
-- Share the app with other Mac users
+## Usage
 
-## 📝 License
+1. Launch **KeyboardBlocker** — the icon appears in the **menu bar**
+2. Click the icon to open the popover
+3. Grant **Input Monitoring** (and Accessibility if prompted) when asked
+4. Tap **Lock Keyboard** when you want to clean
+5. When finished, **hold ESC for 3 seconds** to unlock
+6. **Right-click** the menu bar icon for **Open** or **Quit**
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+While locked, Quit and “Start at login” are intentionally disabled so you don’t exit or change startup settings by accident.
 
-## ❤️ Sponsor this project
+## Privacy and security
 
-If you find KeyboardBlocker useful, please consider sponsoring its development. Your support helps maintain this project and create new features!
+KeyboardBlocker does not collect or transmit data. Input monitoring is used only to intercept keyboard events while the lock is active.
 
-[![Sponsor](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa.svg?style=for-the-badge&logo=github)](https://github.com/sponsors/huseyinaslim)
+## System requirements
 
-## 🔍 Keywords
+- macOS 11 (Big Sur) or later (launch-at-login toggle requires **macOS 13+**)
+- Apple Silicon or Intel
+- Small disk footprint (&lt; 5 MB)
 
-macOS keyboard cleaner, MacBook keyboard lock, keyboard cleaning utility, disable MacBook keyboard, prevent keyboard input, keyboard blocker, Mac keyboard cleaning tool, keyboard lock app, Mac keyboard disabler 
+## Contributing
+
+- [Issues](https://github.com/huseyinaslim/macos-keyboardblocker/issues) — bugs and ideas
+- [Pull requests](https://github.com/huseyinaslim/macos-keyboardblocker/pulls) — improvements
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+## Sponsor
+
+If KeyboardBlocker is useful to you, consider [sponsoring on GitHub](https://github.com/sponsors/huseyinaslim).
+
+## Keywords
+
+macOS keyboard cleaner, MacBook keyboard lock, keyboard cleaning utility, menu bar utility, launch at login, keyboard blocker, Mac keyboard cleaning tool

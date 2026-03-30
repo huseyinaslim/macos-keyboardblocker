@@ -10,7 +10,12 @@ extension NSNotification.Name {
     static let powerButtonPressed = NSNotification.Name("powerButtonPressed")
 }
 
+protocol KeyboardBlockerMousePolicy: AnyObject {
+    func isOverlayWindow(_ window: NSWindow) -> Bool
+}
+
 class KeyboardBlocker: ObservableObject {
+    weak var mousePolicy: KeyboardBlockerMousePolicy?
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var systemEventMonitor: Any?
@@ -300,8 +305,7 @@ class KeyboardBlocker: ObservableObject {
         }
         
         // Daha güçlü sistem olayları engelleme
-        systemEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.systemDefined]) { [weak self] event in
-            guard let self = self else { return }
+        systemEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.systemDefined]) { event in
             
             print("Sistem olayı engellendi (system)")
             
@@ -323,21 +327,18 @@ class KeyboardBlocker: ObservableObject {
     
     // Fare olaylarını yakalayan monitör
     private func captureMouseEvents() {
-        mouseEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { event in
-            // Mouse koordinatlarını al
-            let mouseLocation = NSEvent.mouseLocation
-            
-            // Ana uygulamanın penceresinde ise tıklamaya izin ver
-            if let window = NSApp.mainWindow,
-               window.frame.contains(mouseLocation) {
-                // Ana uygulamaya tıklamalara izin ver
-                print("Ana uygulamaya tıklamaya izin verildi: \(mouseLocation)")
+        mouseEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            guard let self = self else { return event }
+            guard let window = event.window else {
                 return event
-            } else {
-                // Diğer tüm tıklamaları engelle
-                print("Fare tıklaması engellendi: \(mouseLocation)")
+            }
+            if self.mousePolicy?.isOverlayWindow(window) == true {
                 return nil
             }
+            if NSApp.windows.contains(where: { $0 === window }) {
+                return event
+            }
+            return nil
         }
     }
     

@@ -1,182 +1,225 @@
 import SwiftUI
 import AppKit
 
-// Create and configure the application
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate
-
-// Run the application
 app.run()
 
-// App Delegate to handle application lifecycle
 class AppDelegate: NSObject, NSApplicationDelegate {
-    var window: NSWindow?
+    let appState = AppState()
     var overlayWindows: [NSWindow] = []
     var keyboardBlockerView: ContentView?
-    
+    private var statusItem: NSStatusItem?
+    private var popover: NSPopover?
+    private var iconHostingView: NSHostingView<MenuBarIconView>?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // İlk başlangıçta izinleri kontrol et ve iste
         let hasPermission = PermissionsManager.shared.checkInputMonitoringPermission()
         if !hasPermission {
             print("İzin verilmedi, izin isteniyor...")
             PermissionsManager.shared.requestInputMonitoringPermission()
-            
-            // Kullanıcıya izin vermesi için bir dialog göster
+
             let alert = NSAlert()
             alert.messageText = "Klavye Kilidi İzin Gerekiyor"
             alert.informativeText = "Bu uygulama, klavyenizi kilitlemek için 'Giriş İzleme' iznine ihtiyaç duyar. Lütfen izin verin ve sonra uygulamayı yeniden başlatın."
             alert.alertStyle = .warning
             alert.addButton(withTitle: "Ayarları Aç")
             alert.addButton(withTitle: "Tamam")
-            
+
             if alert.runModal() == .alertFirstButtonReturn {
                 PermissionsManager.shared.openPrivacyPreferences()
             }
         }
-        
-        // Create the SwiftUI view that provides the window contents.
-        let contentView = ContentView(overlayHandler: self)
+
+        let contentView = ContentView(overlayHandler: self, appState: appState)
         keyboardBlockerView = contentView
-        
-        // Create the window and set the content view.
-        window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 320, height: 380),
-            styleMask: [.titled, .closable, .miniaturizable],
-            backing: .buffered,
-            defer: false)
-        window?.center()
-        window?.setFrameAutosaveName("Main Window")
-        window?.contentView = NSHostingView(rootView: contentView)
-        window?.makeKeyAndOrderFront(nil)
-        window?.title = "Keyboard Blocker"
-        window?.level = .floating // Her zaman en üstte göster
-        
-        // Pencere stilini modernleştir - vibrancy ve şeffaflık ekle
-        if let windowView = window?.contentView {
-            windowView.wantsLayer = true
-            windowView.layer?.cornerRadius = 10
-            
-            // Başlık çubuğunu daha modern göster
-            window?.titlebarAppearsTransparent = true
-            window?.titleVisibility = .hidden
-        }
-        
-        // Ekranın altına transparan siyah overlay ekleme (tüm ekranlar için)
+
+        setupStatusItem(with: contentView)
         createOverlayWindows()
-        
-        // Pencereyi öne getir
         NSApp.activate(ignoringOtherApps: true)
-        
-        // Acil durum kapatma için klavye kısayolu ekle
         registerAppTerminationHotkey()
     }
-    
+
+    private func setupStatusItem(with contentView: ContentView) {
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem = item
+
+        guard let button = item.button else { return }
+
+        let iconView = MenuBarIconView(appState: appState)
+        let hosting = NSHostingView(rootView: iconView)
+        hosting.frame = NSRect(x: 0, y: 0, width: 22, height: 22)
+        iconHostingView = hosting
+
+        button.title = ""
+        button.image = nil
+        button.addSubview(hosting)
+        hosting.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            hosting.centerXAnchor.constraint(equalTo: button.centerXAnchor),
+            hosting.centerYAnchor.constraint(equalTo: button.centerYAnchor),
+            hosting.widthAnchor.constraint(equalToConstant: 22),
+            hosting.heightAnchor.constraint(equalToConstant: 22)
+        ])
+
+        let pop = NSPopover()
+        pop.contentSize = NSSize(width: 320, height: 420)
+        // transient: overlay / dış tıklama popover'ı kapatır; kilit sonrası açık kalsın diye applicationDefined
+        pop.behavior = .applicationDefined
+        pop.animates = true
+        pop.delegate = self
+        let host = NSHostingView(rootView: contentView)
+        host.frame = NSRect(origin: .zero, size: pop.contentSize)
+        let controller = NSViewController()
+        controller.view = host
+        pop.contentViewController = controller
+        popover = pop
+
+        button.target = self
+        button.action = #selector(togglePopover(_:))
+        button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+    }
+
+    @objc private func togglePopover(_ sender: Any?) {
+        guard let button = statusItem?.button, let popover = popover else { return }
+
+        let event = NSApp.currentEvent
+        if event?.type == .rightMouseUp {
+            showStatusMenu(from: button)
+            return
+        }
+
+        if popover.isShown {
+            popover.performClose(sender)
+        } else {
+            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            NSApp.activate(ignoringOtherApps: true)
+        }
+    }
+
+    private func showStatusMenu(from button: NSStatusBarButton) {
+        let menu = NSMenu()
+        let openItem = NSMenuItem(title: "Open", action: #selector(openPopoverFromMenu), keyEquivalent: "")
+        openItem.target = self
+        menu.addItem(openItem)
+        menu.addItem(.separator())
+        let quitItem = NSMenuItem(title: "Quit Keyboard Blocker", action: #selector(quitApp), keyEquivalent: "q")
+        quitItem.keyEquivalentModifierMask = [.command]
+        quitItem.target = self
+        quitItem.isEnabled = keyboardBlockerView?.isBlocking != true
+        menu.addItem(quitItem)
+        menu.popUp(positioning: nil, at: NSPoint(x: button.bounds.midX, y: button.bounds.minY), in: button)
+    }
+
+    @objc private func openPopoverFromMenu() {
+        guard let button = statusItem?.button, let popover = popover, !popover.isShown else { return }
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc private func quitApp() {
+        NSApp.terminate(nil)
+    }
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        // Uygulamayı kapatmadan önce herhangi bir kilitleme varsa kaldır
-        if let keyboardBlockerView = keyboardBlockerView, keyboardBlockerView.isBlocking {
-            keyboardBlockerView.toggleBlocking()
-        }
-        return true
+        false
     }
-    
-    // Uygulamayı kapatma işlemi
+
     func applicationWillTerminate(_ notification: Notification) {
-        // Uygulamayı kapatmadan önce herhangi bir kilitleme varsa kaldır
         if let keyboardBlockerView = keyboardBlockerView, keyboardBlockerView.isBlocking {
             keyboardBlockerView.toggleBlocking()
         }
     }
-    
-    // Escape tuşuyla uygulamayı kapatma kısayolunu kaydet
+
     private func registerAppTerminationHotkey() {
         NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
-            // CMD+Q kombinasyonu ile uygulamayı kapat
-            if event.modifierFlags.contains(.command) && event.keyCode == 12 { // Q tuşu
+            if event.modifierFlags.contains(.command) && event.keyCode == 12 {
+                if self?.keyboardBlockerView?.isBlocking == true {
+                    NSSound.beep()
+                    return nil
+                }
                 NSApp.terminate(nil)
                 return nil
             }
-            
-            // CMD+W ile pencereyi kapat
-            if event.modifierFlags.contains(.command) && event.keyCode == 13 { // W tuşu
-                self?.window?.close()
-                return nil
-            }
-            
             return event
         }
     }
-    
-    // Tüm ekranlar için overlay pencereleri oluştur
+
     func createOverlayWindows() {
-        // Mevcut overlayleri temizle
         overlayWindows.forEach { $0.orderOut(nil) }
         overlayWindows.removeAll()
-        
-        // Sistemdeki tüm ekranları al
-        let screens = NSScreen.screens
-        
-        // Her ekran için bir overlay penceresi oluştur
-        for screen in screens {
+
+        for screen in NSScreen.screens {
             let overlayWindow = NSWindow(
                 contentRect: screen.frame,
                 styleMask: .borderless,
                 backing: .buffered,
                 defer: false,
                 screen: screen)
-            
-            overlayWindow.backgroundColor = NSColor.black.withAlphaComponent(0.0) // Başlangıçta tamamen transparan
+
+            overlayWindow.backgroundColor = NSColor.black.withAlphaComponent(0.0)
             overlayWindow.isOpaque = false
             overlayWindow.hasShadow = false
-            overlayWindow.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.maximumWindow))) // En yüksek seviye
-            overlayWindow.ignoresMouseEvents = true // Başlangıçta mouse tıklamalarını engelleme
-            
-            // Tam ekran uygulamalar üzerinde de görünmesini sağla
+            overlayWindow.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.maximumWindow)))
+            overlayWindow.ignoresMouseEvents = true
             overlayWindow.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-            
-            // Pencereyi listeye ekle
+
             overlayWindows.append(overlayWindow)
         }
     }
-    
-    // Keyboard blocker aktifken overlay'i göster (tüm ekranlarda)
+
     func showOverlay() {
-        // Yeni ekranlar eklenmişse pencerelerimizi güncelle
         if NSScreen.screens.count != overlayWindows.count {
             createOverlayWindows()
         }
-        
-        // Tüm ekranlardaki overlay'leri göster
+
         for (index, overlayWindow) in overlayWindows.enumerated() {
             guard index < NSScreen.screens.count else { break }
-            
-            // Ekran boyutuna göre overlay penceresini yeniden boyutlandır
+
             let screen = NSScreen.screens[index]
             overlayWindow.setFrame(screen.frame, display: true)
-            
-            // Daha zarif bir overlay için %40 saydamlık kullan
             overlayWindow.backgroundColor = NSColor.black.withAlphaComponent(0.4)
             overlayWindow.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.maximumWindow)))
             overlayWindow.makeKeyAndOrderFront(nil)
-            overlayWindow.ignoresMouseEvents = false // Mouse tıklamalarını engelle
+            overlayWindow.ignoresMouseEvents = false
         }
-        
-        // Ana pencereyi overlay'in üstünde tut
-        window?.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.maximumWindow)) + 1)
-        window?.orderFrontRegardless()
+
+        raisePopoverWindowAboveOverlayIfNeeded()
     }
-    
-    // Keyboard blocker deaktif olduğunda overlay'i gizle
+
     func hideOverlay() {
-        // Tüm ekranlardaki overlay'leri gizle
         for overlayWindow in overlayWindows {
             overlayWindow.backgroundColor = NSColor.black.withAlphaComponent(0.0)
             overlayWindow.orderOut(nil)
-            overlayWindow.ignoresMouseEvents = true // Mouse tıklamalarını engelleme
+            overlayWindow.ignoresMouseEvents = true
         }
-        
-        // Ana pencere seviyesini düşür
-        window?.level = .floating
-        window?.orderFrontRegardless()
+        resetPopoverWindowLevelIfNeeded()
     }
-} 
+
+    private func raisePopoverWindowAboveOverlayIfNeeded() {
+        guard let popover = popover, popover.isShown,
+              let w = popover.contentViewController?.view.window else { return }
+        w.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.maximumWindow)) + 2)
+        w.orderFrontRegardless()
+    }
+
+    private func resetPopoverWindowLevelIfNeeded() {
+        guard let w = popover?.contentViewController?.view.window else { return }
+        w.level = .popUpMenu
+    }
+}
+
+extension AppDelegate: KeyboardBlockerMousePolicy {
+    func isOverlayWindow(_ window: NSWindow) -> Bool {
+        overlayWindows.contains { $0 === window }
+    }
+}
+
+extension AppDelegate: NSPopoverDelegate {
+    func popoverDidShow(_ notification: Notification) {
+        if keyboardBlockerView?.isBlocking == true {
+            raisePopoverWindowAboveOverlayIfNeeded()
+        }
+    }
+}

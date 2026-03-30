@@ -4,41 +4,40 @@ struct ContentView: View {
     @StateObject private var keyboardBlocker = KeyboardBlocker()
     @State var isBlocking = false
     @State private var hasPermission = false
+    @State private var launchAtLoginEnabled = false
+    @ObservedObject var appState: AppState
     var overlayHandler: AppDelegate
-    
-    init(overlayHandler: AppDelegate) {
+
+    init(overlayHandler: AppDelegate, appState: AppState) {
         self.overlayHandler = overlayHandler
+        self.appState = appState
     }
-    
+
     var body: some View {
-        VStack(spacing: 30) {
-            // Logo ve başlık
+        VStack(spacing: 22) {
             VStack(spacing: 15) {
                 ZStack {
-                    // Arka plan halkası
                     Circle()
                         .fill(Color(.windowBackgroundColor).opacity(0.1))
                         .frame(width: 100, height: 100)
-                    
-                    // Dış halka (accent color)
+
                     Circle()
                         .strokeBorder(isBlocking ? Color.red.opacity(0.8) : Color.blue.opacity(0.8), lineWidth: 2)
                         .frame(width: 100, height: 100)
-                    
-                    // İkon
+
                     Image(systemName: isBlocking ? "keyboard.fill" : "keyboard")
                         .font(.system(size: 45, weight: .light))
                         .foregroundColor(isBlocking ? .red : .blue)
                         .frame(width: 70, height: 70)
                 }
                 .animation(.easeInOut(duration: 0.3), value: isBlocking)
-                
+
                 Text(isBlocking ? "Keyboard Locked" : "Keyboard Blocker")
                     .font(.system(size: 22, weight: .medium, design: .rounded))
                     .foregroundColor(isBlocking ? .red : .primary)
             }
-            .padding(.top, 20)
-            
+            .padding(.top, 16)
+
             if !hasPermission {
                 permissionView
             } else {
@@ -48,37 +47,80 @@ struct ContentView: View {
                     unlockView
                 }
             }
-            
-            Spacer()
+
+            launchAtLoginSection
+
+            Button(action: { NSApp.terminate(nil) }) {
+                Text("Quit Keyboard Blocker")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(isBlocking ? .secondary.opacity(0.45) : .secondary)
+            }
+            .buttonStyle(.plain)
+            .disabled(isBlocking)
+            .padding(.bottom, 8)
         }
-        .frame(width: 320, height: 380)
+        .frame(width: 320, height: 420)
         .background(Color(NSColor.windowBackgroundColor))
         .onAppear {
             checkPermission()
             setupEmergencyUnlock()
+            keyboardBlocker.mousePolicy = overlayHandler
+            launchAtLoginEnabled = LaunchAtLoginManager.refreshStatus()
         }
     }
-    
-    // İzin View'i
+
+    private var launchAtLoginBinding: Binding<Bool> {
+        Binding(
+            get: { launchAtLoginEnabled },
+            set: { newValue in
+                guard LaunchAtLoginManager.isSupported else { return }
+                launchAtLoginEnabled = newValue
+                LaunchAtLoginManager.syncToggleToSystem(newValue) { error in
+                    DispatchQueue.main.async {
+                        if error != nil {
+                            launchAtLoginEnabled = LaunchAtLoginManager.refreshStatus()
+                        }
+                    }
+                }
+            }
+        )
+    }
+
+    private var launchAtLoginSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle("Start at login", isOn: launchAtLoginBinding)
+                .font(.system(size: 13, weight: .medium))
+                .disabled(!LaunchAtLoginManager.isSupported || isBlocking)
+            if !LaunchAtLoginManager.isSupported {
+                Text("macOS 13 or later: enable here. Older systems: System Settings → General → Login Items.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+    }
+
     private var permissionView: some View {
         VStack(spacing: 20) {
             Text("Input Monitoring Permission Required")
                 .font(.headline)
                 .foregroundColor(.red)
                 .multilineTextAlignment(.center)
-            
+
             Text("This app needs permission to monitor input to block your keyboard.")
                 .font(.system(size: 14))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
-            
+
             HStack(spacing: 15) {
                 Button("Grant Permission") {
                     PermissionsManager.shared.requestInputMonitoringPermission()
                     checkPermission()
                 }
                 .buttonStyle(ModernButtonStyle(color: .blue))
-                
+
                 Button("Open Settings") {
                     PermissionsManager.shared.openPrivacyPreferences()
                 }
@@ -92,27 +134,26 @@ struct ContentView: View {
         )
         .padding(.horizontal)
     }
-    
-    // Kilitli Durumda Görünüm
+
     private var lockedView: some View {
         ZStack {
             VStack(spacing: 20) {
                 Text("Your keyboard is now locked for cleaning")
                     .font(.system(size: 16, weight: .medium))
                     .multilineTextAlignment(.center)
-                
+
                 HStack(spacing: 10) {
                     ZStack {
                         RoundedRectangle(cornerRadius: 6)
                             .fill(Color(NSColor.controlBackgroundColor))
                             .frame(width: 36, height: 36)
                             .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
-                        
+
                         Text("ESC")
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.primary)
                     }
-                    
+
                     Text("Hold ESC key for 3 seconds to unlock")
                         .font(.system(size: 16, weight: .medium))
                         .lineLimit(2)
@@ -122,24 +163,20 @@ struct ContentView: View {
             }
             .opacity(keyboardBlocker.isEscPressed ? 0 : 1.0)
             .animation(.easeInOut, value: keyboardBlocker.isEscPressed)
-            
-            // ESC Basılı Tutma Göstergesi
+
             if keyboardBlocker.isEscPressed {
                 ZStack {
-                    // Arka plan halkası
                     Circle()
                         .stroke(Color.gray.opacity(0.3), lineWidth: 8)
                         .frame(width: 120, height: 120)
-                    
-                    // İlerleme halkası (Tersi: Başlangıçta dolu, azalarak biter)
+
                     Circle()
                         .trim(from: 0.0, to: keyboardBlocker.unlockProgress)
                         .stroke(Color.red, style: StrokeStyle(lineWidth: 8, lineCap: .round))
                         .frame(width: 120, height: 120)
                         .rotationEffect(.degrees(-90))
                         .animation(.linear(duration: 0.05), value: keyboardBlocker.unlockProgress)
-                    
-                    // Geri sayım sayısı
+
                     let secondsLeft = Int(ceil(keyboardBlocker.unlockProgress * 3.0))
                     Text("\(secondsLeft)")
                         .font(.system(size: 40, weight: .bold))
@@ -157,14 +194,13 @@ struct ContentView: View {
         .padding(.horizontal)
         .transition(.opacity)
     }
-    
-    // Kilit Açık Durumda Görünüm
+
     private var unlockView: some View {
         VStack(spacing: 20) {
             Text("Ready to lock your keyboard for cleaning")
                 .font(.system(size: 16, weight: .medium))
                 .multilineTextAlignment(.center)
-            
+
             Button(action: toggleBlocking) {
                 HStack(spacing: 8) {
                     Image(systemName: "lock.fill")
@@ -186,25 +222,25 @@ struct ContentView: View {
         .padding(.horizontal)
         .transition(.opacity)
     }
-    
+
     private func checkPermission() {
         hasPermission = PermissionsManager.shared.checkInputMonitoringPermission()
     }
-    
+
     private func setupEmergencyUnlock() {
-        // Acil durum kilit açma handler'ını ayarla
         keyboardBlocker.setEmergencyUnlockHandler {
             if isBlocking {
                 toggleBlocking()
             }
         }
     }
-    
+
     func toggleBlocking() {
         withAnimation {
             isBlocking.toggle()
         }
-        
+        appState.isBlocking = isBlocking
+
         if isBlocking {
             keyboardBlocker.startBlocking()
             overlayHandler.showOverlay()
@@ -215,10 +251,9 @@ struct ContentView: View {
     }
 }
 
-// Modern macOS tarzı buton stili
 struct ModernButtonStyle: ButtonStyle {
     var color: Color
-    
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 14, weight: .medium))
@@ -236,7 +271,7 @@ struct ModernButtonStyle: ButtonStyle {
 
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
-        let mockAppDelegate = AppDelegate()
-        return ContentView(overlayHandler: mockAppDelegate)
+        let delegate = AppDelegate()
+        return ContentView(overlayHandler: delegate, appState: delegate.appState)
     }
-} 
+}
